@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Найди пару</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; }
+  body {
+    background: radial-gradient(circle at 50% 15%, #151d42, #070b1d);
+    color: #fff;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    display: flex; flex-direction: column; align-items: center;
+    padding: 14px 16px 24px;
+    touch-action: manipulation;
+    overflow-x: hidden;
+  }
+  h1 { font-size: 24px; margin: 6px 0 10px; text-shadow: 0 0 12px rgba(76, 201, 240, 0.5); }
+  .hud { display: flex; gap: 18px; margin-bottom: 14px; font-size: 16px; color: #cdd8ff; }
+  .hud b { color: #4cc9f0; font-variant-numeric: tabular-nums; }
+  .grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 9px; width: 100%; max-width: 400px; }
+  .card { position: relative; aspect-ratio: 3 / 4; perspective: 600px; cursor: pointer; }
+  .card .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform 0.4s; }
+  .card.open .inner { transform: rotateY(180deg); }
+  .face {
+    position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden;
+    border-radius: 12px; display: flex; align-items: center; justify-content: center;
+    font-size: 34px;
+  }
+  .back {
+    background: linear-gradient(135deg, #1d2a55, #141b3d);
+    border: 1px solid #2e3f7a;
+    box-shadow: inset 0 0 18px rgba(76, 201, 240, 0.12);
+  }
+  .back::after { content: '?'; color: #4cc9f0; font-size: 26px; font-weight: 700; }
+  .front {
+    background: linear-gradient(135deg, #22305e, #1a2350);
+    border: 1px solid #3b4f9c;
+    transform: rotateY(180deg);
+  }
+  .card.won .front { border-color: #34d399; box-shadow: 0 0 16px rgba(52, 211, 153, 0.55); }
+  .card.shake .inner { animation: shake 0.35s; }
+  @keyframes shake {
+    0%, 100% { transform: rotateY(180deg) translateX(0); }
+    25% { transform: rotateY(180deg) translateX(-6px); }
+    75% { transform: rotateY(180deg) translateX(6px); }
+  }
+  #msg { margin-top: 14px; font-size: 18px; min-height: 26px; color: #34d399; font-weight: 700; }
+  button {
+    margin-top: 12px; padding: 11px 28px; font-size: 16px; font-weight: 700; font-family: inherit;
+    border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #4cc9f0, #a78bfa);
+    color: #0a0e1a; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+  .win {
+    position: fixed; inset: 0; z-index: 5;
+    background: rgba(4, 7, 18, 0.92);
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px;
+    text-align: center; padding: 24px;
+  }
+  .win h2 { font-size: 30px; }
+  .win p { color: #cdd8ff; font-size: 18px; }
+</style>
+</head>
+<body>
+<h1>🃏 Найди пару</h1>
+<div class="hud">
+  <span>Ходы: <b id="moves">0</b></span>
+  <span>⏱ <b id="time">0:00</b></span>
+  <span>Пары: <b id="pairs">0/6</b></span>
+</div>
+<div class="grid" id="grid"></div>
+<div id="msg"></div>
+<button id="btnNew">Новая игра</button>
+
+<div class="win hidden" id="win">
+  <h2>🎉 Победа!</h2>
+  <p id="winStats"></p>
+  <button id="btnAgain">Сыграть ещё</button>
+</div>
+
+<script>
+(function () {
+  var EMOJI = ['🌟', '🚀', '🍩', '🐱', '🎧', '🍕', '🐙', '🎈'];
+  var grid = document.getElementById('grid');
+  var movesEl = document.getElementById('moves');
+  var timeEl = document.getElementById('time');
+  var pairsEl = document.getElementById('pairs');
+  var msgEl = document.getElementById('msg');
+
+  var first = null, lock = false;
+  var moves = 0, matched = 0, seconds = 0, timerId = null, started = false;
+
+  function fmt(s) {
+    return Math.floor(s / 60) + ':' + String(s % 60).padStart(2, '0');
+  }
+
+  function newGame() {
+    clearInterval(timerId);
+    timerId = null;
+    first = null;
+    lock = false;
+    moves = 0;
+    matched = 0;
+    seconds = 0;
+    started = false;
+    movesEl.textContent = '0';
+    timeEl.textContent = '0:00';
+    pairsEl.textContent = '0/6';
+    msgEl.textContent = '';
+    document.getElementById('win').classList.add('hidden');
+
+    var pool = EMOJI.slice(0, 6);
+    pool = pool.concat(pool);
+    pool.sort(function () { return Math.random() - 0.5; });
+
+    grid.innerHTML = '';
+    pool.forEach(function (e) {
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.setAttribute('data-emoji', e);
+      card.innerHTML = '<div class="inner"><div class="face back"></div><div class="face front">' + e + '</div></div>';
+      card.addEventListener('click', function () { tap(card); });
+      grid.appendChild(card);
+    });
+  }
+
+  function startTimer() {
+    if (started) return;
+    started = true;
+    timerId = setInterval(function () {
+      seconds += 1;
+      timeEl.textContent = fmt(seconds);
+    }, 1000);
+  }
+
+  function tap(card) {
+    if (lock) return;
+    if (card === first) return;
+    if (card.classList.contains('open') || card.classList.contains('won')) return;
+    startTimer();
+    card.classList.add('open');
+
+    if (!first) {
+      first = card;
+      return;
+    }
+
+    moves += 1;
+    movesEl.textContent = moves;
+    var a = first;
+    var b = card;
+    first = null;
+
+    if (a.getAttribute('data-emoji') === b.getAttribute('data-emoji')) {
+      a.classList.add('won');
+      b.classList.add('won');
+      matched += 1;
+      pairsEl.textContent = matched + '/6';
+      msgEl.textContent = '👍 Нашёл!';
+      if (matched === 6) {
+        clearInterval(timerId);
+        timerId = null;
+        setTimeout(function () {
+          document.getElementById('winStats').textContent = 'Ходы: ' + moves + '  •  Время: ' + fmt(seconds);
+          document.getElementById('win').classList.remove('hidden');
+        }, 500);
+      }
+    } else {
+      lock = true;
+      msgEl.textContent = 'Мимо, попробуй ещё…';
+      setTimeout(function () {
+        a.classList.remove('open');
+        b.classList.remove('open');
+        lock = false;
+        if (!document.getElementById('win').classList.contains('hidden')) return;
+        msgEl.textContent = '';
+      }, 700);
+    }
+  }
+
+  document.getElementById('btnNew').addEventListener('click', newGame);
+  document.getElementById('btnAgain').addEventListener('click', newGame);
+  newGame();
+})();
+</script>
+</body>
+</html>

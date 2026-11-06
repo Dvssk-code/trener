@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VibeClass — Ученик</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">⚡ Vibe<span>Class</span></a>
+  <a id="btnSwitchTeam" class="btn btn-ghost btn-small" href="#">Сменить команду</a>
+</header>
+
+<main class="app">
+  <!-- Шаг 1: выбор команды -->
+  <section id="teamSelect" class="panel center-panel" hidden>
+    <h2>Выбери свою команду</h2>
+    <p class="muted" style="margin-top:-14px">У каждой команды своя тема игры</p>
+    <div class="team-pick">
+      <button class="team-btn" data-team="1">
+        <span class="team-emoji">⭐</span>
+        Команда 1
+        <span class="team-theme">«Лови звёзды»</span>
+      </button>
+      <button class="team-btn" data-team="2">
+        <span class="team-emoji">🃏</span>
+        Команда 2
+        <span class="team-theme">«Найди пару»</span>
+      </button>
+      <button class="team-btn" data-team="3">
+        <span class="team-emoji">🏃</span>
+        Команда 3
+        <span class="team-theme">«Тап-раннер»</span>
+      </button>
+    </div>
+  </section>
+
+  <!-- Шаг 2: рабочее место -->
+  <section id="work" hidden>
+    <div class="layout">
+      <section class="panel">
+        <div class="panel-head">
+          <h2>📝 Код твоей игры</h2>
+          <button id="btnPreview" class="btn btn-ghost btn-small">🔄 Обновить превью</button>
+        </div>
+        <textarea id="editor" class="editor" spellcheck="false"
+          placeholder="Опиши ИИ словами, что нужно сделать или изменить, — и код появится здесь. Можно редактировать и вручную."></textarea>
+      </section>
+
+      <section class="panel">
+        <div class="panel-head">
+          <h2>💬 Чат с ИИ</h2>
+          <div id="attempt" class="attempt-badge">Попытка 0 из 3</div>
+        </div>
+        <div id="chatLog" class="chat-log" aria-live="polite"></div>
+        <div class="chat-input">
+          <textarea id="promptInput" rows="2"
+            placeholder="Например: «сделай фон ночным» или «добавь звуки»…"></textarea>
+          <button id="btnSend" class="btn btn-primary">Спросить ИИ ✨</button>
+        </div>
+      </section>
+    </div>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>🎮 Превью игры</h2>
+        <span class="muted" style="font-size:13px">управление — касанием</span>
+      </div>
+      <div class="preview-wrap">
+        <iframe id="preview" sandbox="allow-scripts" title="Превью игры"
+          srcdoc="&lt;html&gt;&lt;body style=&quot;margin:0;background:#070b1d;color:#8b96b5;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;text-align:center;padding:20px&quot;&gt;Спроси ИИ о своей игре — и она появится здесь 🎮&lt;/body&gt;&lt;/html&gt;"></iframe>
+      </div>
+      <div class="submit-row">
+        <button id="btnSubmit" class="btn btn-primary btn-big">🚀 Отправить учителю</button>
+      </div>
+    </section>
+  </section>
+</main>
+
+<!-- Полноэкранная анимация создания QR -->
+<div id="qrOverlay" class="overlay-full" hidden>
+  <div class="qr-card">
+    <div id="qrPhase" class="qr-phase">
+      <div class="qr-spinner" aria-hidden="true"></div>
+      <div class="qr-title">Создаём QR-код…</div>
+      <div class="progress"><div id="qrProgress" class="progress-bar"></div></div>
+      <div id="qrStatus" class="qr-status">Упаковываем код</div>
+    </div>
+    <div id="qrDone" class="qr-done" hidden>
+      <div class="qr-check">✅</div>
+      <div class="qr-title">Отправлено учителю!</div>
+      <div id="qrBox" class="qr-box"></div>
+      <a id="qrLink" href="#" target="_blank" rel="noopener" class="muted">Открыть ссылку на игру ↗</a>
+    </div>
+  </div>
+</div>
+
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/student.js"></script>
+</body>
+</html>

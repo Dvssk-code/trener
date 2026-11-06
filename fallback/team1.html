@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Лови звёзды</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #060a1c; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { touch-action: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between; align-items: flex-start;
+    padding: 12px 16px; color: #fff; font-size: 18px; font-weight: 600;
+    text-shadow: 0 0 10px rgba(76, 201, 240, 0.8);
+    pointer-events: none; z-index: 2;
+  }
+  .combo {
+    display: none; margin-top: 6px;
+    font-size: 15px; font-weight: 800; color: #ffd54a;
+    text-shadow: 0 0 12px rgba(255, 213, 74, 0.9);
+  }
+  .screen {
+    position: fixed; inset: 0; z-index: 3;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: rgba(4, 7, 18, 0.87); color: #fff; text-align: center; padding: 24px;
+  }
+  .screen h1 { font-size: 34px; }
+  .screen p { color: #9fb0d8; font-size: 16px; line-height: 1.5; }
+  .screen button {
+    font-size: 20px; padding: 14px 34px; border: none; border-radius: 16px;
+    background: linear-gradient(135deg, #4cc9f0, #a78bfa);
+    color: #0a0e1a; font-weight: 700; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud">
+  <div>
+    <span id="score">Очки: 0</span>
+    <div class="combo" id="combo">Комбо x2</div>
+  </div>
+  <span id="lives">❤️❤️❤️</span>
+</div>
+
+<div class="screen" id="startScreen">
+  <h1>⭐ Лови звёзды</h1>
+  <p>Корзина едет за твоим пальцем.<br>
+  Обычная звезда — <b style="color:#ffe08a">+1</b>, золотая — <b style="color:#ffd54a">+5</b>, комета — <b style="color:#7c5cff">+10</b>.<br>
+  Лови подряд — растёт комбо! Не упусти три звезды.</p>
+  <button id="btnStart">Играть</button>
+</div>
+
+<div class="screen hidden" id="overScreen">
+  <h1>Игра окончена</h1>
+  <p id="overScore">Очки: 0</p>
+  <button id="btnRestart">Ещё раз</button>
+</div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0;
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    makeBg();
+  }
+
+  var bg = [], moon = null;
+  function makeBg() {
+    bg = [];
+    for (var i = 0; i < 46; i++) {
+      bg.push({ x: Math.random() * W, y: Math.random() * H, r: Math.random() * 1.6 + 0.4, p: Math.random() * Math.PI * 2 });
+    }
+    moon = { x: W * 0.82, y: H * 0.18, r: 34 };
+  }
+
+  window.addEventListener('resize', resize);
+  resize();
+
+  var BASKET_W = 76, BASKET_H = 26, BASKET_Y = 92;
+  var basketX = W / 2;
+  var stars = [], particles = [];
+  var score = 0, lives = 3, running = false;
+  var combo = 0, comboTimer = 0;
+  var spawnTimer = 0, speed = 2.2, lastTime = 0;
+
+  function updateHud() {
+    document.getElementById('score').textContent = 'Очки: ' + score;
+    var h = '';
+    for (var i = 0; i < 3; i++) h += i < lives ? '❤️' : '🖤';
+    document.getElementById('lives').textContent = h;
+    var c = document.getElementById('combo');
+    if (combo >= 2) {
+      c.style.display = 'block';
+      c.textContent = 'Комбо x' + combo;
+    } else {
+      c.style.display = 'none';
+    }
+  }
+
+  function reset() {
+    stars = [];
+    particles = [];
+    score = 0;
+    lives = 3;
+    combo = 0;
+    speed = 2.2;
+    spawnTimer = 0.5;
+    updateHud();
+  }
+
+  function spawnStar() {
+    var roll = Math.random();
+    var kind = roll < 0.14 ? 'golden' : roll < 0.24 ? 'comet' : 'normal';
+    var r = kind === 'golden' ? 16 : kind === 'comet' ? 13 : 12;
+    var v = kind === 'comet' ? 1.7 : kind === 'golden' ? 1.25 : 1;
+    stars.push({
+      x: 30 + Math.random() * (W - 60),
+      y: -30,
+      r: r,
+      vy: speed * v + Math.random() * 0.6,
+      kind: kind,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * (kind === 'comet' ? 0.22 : 0.08)
+    });
+  }
+
+  function follow(e) {
+    if (!running) return;
+    e.preventDefault();
+    var x;
+    if (e.touches && e.touches.length) x = e.touches[0].clientX;
+    else x = e.clientX;
+    basketX = Math.max(BASKET_W / 2, Math.min(W - BASKET_W / 2, x));
+  }
+  window.addEventListener('touchmove', follow, { passive: false });
+  window.addEventListener('touchstart', follow, { passive: false });
+  window.addEventListener('mousemove', follow);
+
+  function starShape(x, y, r, rot, points) {
+    ctx.beginPath();
+    for (var i = 0; i < points * 2; i++) {
+      var rad = i % 2 === 0 ? r : r * 0.45;
+      var a = rot + (i * Math.PI) / points - Math.PI / 2;
+      var px = x + Math.cos(a) * rad;
+      var py = y + Math.sin(a) * rad;
+      if (i === 0) ctx.moveTo(px, py); else ctx.lineTo(px, py);
+    }
+    ctx.closePath();
+  }
+
+  function burst(x, y, color, n) {
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2;
+      var s = 1 + Math.random() * 3.4;
+      particles.push({ x: x, y: y, vx: Math.cos(a) * s, vy: Math.sin(a) * s - 1, life: 1, color: color });
+    }
+  }
+
+  function step(dt) {
+    spawnTimer -= dt;
+    if (spawnTimer <= 0) {
+      spawnStar();
+      spawnTimer = Math.max(0.65, 1.7 - speed * 0.12) * (0.7 + Math.random() * 0.6);
+    }
+    speed += dt * 0.1;
+    if (comboTimer > 0) {
+      comboTimer -= dt;
+      if (comboTimer <= 0) {
+        combo = 0;
+        updateHud();
+      }
+    }
+
+    var basketY = H - BASKET_Y;
+
+    for (var i = stars.length - 1; i >= 0; i--) {
+      var s = stars[i];
+      s.y += s.vy * dt * 60;
+      s.rot += s.vr;
+      var dx = s.x - basketX;
+      var dy = s.y - basketY;
+      if (Math.abs(dx) < BASKET_W / 2 + s.r * 0.4 && dy > -6 && dy < BASKET_H) {
+        stars.splice(i, 1);
+        combo += 1;
+        comboTimer = 2.2;
+        var base = s.kind === 'comet' ? 10 : s.kind === 'golden' ? 5 : 1;
+        var mult = Math.min(3, 1 + Math.floor((combo - 1) / 3));
+        score += base * mult;
+        var color = s.kind === 'comet' ? '#7c5cff' : s.kind === 'golden' ? '#ffd54a' : '#4cc9f0';
+        burst(s.x, s.y, color, s.kind === 'normal' ? 10 : 16);
+        updateHud();
+        continue;
+      }
+      if (s.y > H + 30) {
+        stars.splice(i, 1);
+        lives -= 1;
+        updateHud();
+        if (lives <= 0) endGame();
+      }
+    }
+
+    for (var j = particles.length - 1; j >= 0; j--) {
+      var p = particles[j];
+      p.x += p.vx;
+      p.y += p.vy;
+      p.vy += 0.08;
+      p.life -= 0.03;
+      if (p.life <= 0) particles.splice(j, 1);
+    }
+  }
+
+  function draw(t) {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0a0f2e');
+    g.addColorStop(0.6, '#080d24');
+    g.addColorStop(1, '#060a1c');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    if (moon) {
+      ctx.save();
+      ctx.shadowColor = '#cdd8ff';
+      ctx.shadowBlur = 30;
+      ctx.fillStyle = '#e6ecff';
+      ctx.beginPath();
+      ctx.arc(moon.x, moon.y, moon.r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    ctx.fillStyle = '#ffffff';
+    for (var i = 0; i < bg.length; i++) {
+      var b = bg[i];
+      ctx.globalAlpha = 0.3 + 0.5 * Math.abs(Math.sin(t / 700 + b.p));
+      ctx.beginPath();
+      ctx.arc(b.x, b.y, b.r, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+
+    var basketY = H - BASKET_Y;
+    ctx.fillStyle = '#2b3a67';
+    ctx.strokeStyle = '#4cc9f0';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(basketX - BASKET_W / 2, basketY - BASKET_H / 2);
+    ctx.lineTo(basketX + BASKET_W / 2, basketY - BASKET_H / 2);
+    ctx.lineTo(basketX + BASKET_W / 2 - 11, basketY + BASKET_H / 2);
+    ctx.lineTo(basketX - BASKET_W / 2 + 11, basketY + BASKET_H / 2);
+    ctx.closePath();
+    ctx.fill();
+    ctx.stroke();
+
+    for (var k = 0; k < stars.length; k++) {
+      var s = stars[k];
+      ctx.save();
+      if (s.kind === 'comet') {
+        ctx.shadowColor = '#7c5cff';
+        ctx.shadowBlur = 18;
+        ctx.fillStyle = '#9d7bff';
+        var trail = ctx.createLinearGradient(s.x - 46, s.y - 30, s.x, s.y);
+        trail.addColorStop(0, 'rgba(124, 92, 255, 0)');
+        trail.addColorStop(1, 'rgba(124, 92, 255, 0.55)');
+        ctx.strokeStyle = trail;
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.moveTo(s.x - 46, s.y - 30);
+        ctx.lineTo(s.x, s.y);
+        ctx.stroke();
+      } else if (s.kind === 'golden') {
+        ctx.shadowColor = '#ffd54a';
+        ctx.shadowBlur = 16;
+        ctx.fillStyle = '#ffd54a';
+      } else {
+        ctx.shadowColor = '#4cc9f0';
+        ctx.shadowBlur = 14;
+        ctx.fillStyle = '#ffe08a';
+      }
+      starShape(s.x, s.y, s.r, s.rot, s.kind === 'comet' ? 3 : 5);
+      ctx.fill();
+      ctx.restore();
+    }
+
+    for (var m = 0; m < particles.length; m++) {
+      var p = particles[m];
+      ctx.globalAlpha = Math.max(0, p.life);
+      ctx.fillStyle = p.color;
+      ctx.beginPath();
+      ctx.arc(p.x, p.y, 2.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  function loop(t) {
+    if (!running) return;
+    var dt = Math.min(0.05, (t - lastTime) / 1000 || 0.016);
+    lastTime = t;
+    step(dt);
+    draw(t);
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    reset();
+    running = true;
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('overScreen').classList.add('hidden');
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function endGame() {
+    running = false;
+    document.getElementById('overScore').textContent = 'Очки: ' + score;
+    document.getElementById('overScreen').classList.remove('hidden');
+  }
+
+  document.getElementById('btnStart').addEventListener('click', start);
+  document.getElementById('btnRestart').addEventListener('click', start);
+})();
+</script>
+</body>
+</html>

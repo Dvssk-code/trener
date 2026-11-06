@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VibeClass — Учитель</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="topbar">
+  <a class="brand" href="/">⚡ Vibe<span>Class</span></a>
+  <button id="btnReset" class="btn btn-ghost btn-small">Сбросить урок</button>
+</header>
+
+<main class="app">
+  <div class="layout">
+    <section class="panel">
+      <div class="panel-head">
+        <h2>📝 Редактор кода</h2>
+        <button id="btnRun" class="btn btn-primary btn-small">▶ Запустить</button>
+      </div>
+      <textarea id="editor" class="editor" spellcheck="false" placeholder="После сценария сюда «напечатается» код демо-игры. Его можно редактировать."></textarea>
+      <div id="gameFrame" class="game-frame" hidden>
+        <div class="frame-head">
+          <span>Демо-игра</span>
+          <button id="btnCloseFrame" class="btn btn-ghost btn-small">Закрыть</button>
+        </div>
+        <iframe id="iframe" sandbox="allow-scripts" title="Демо-игра"></iframe>
+      </div>
+    </section>
+
+    <section class="panel">
+      <div class="panel-head">
+        <h2>💬 Демонстрационный чат с ИИ</h2>
+      </div>
+      <div id="chatLog" class="chat-log" aria-live="polite"></div>
+      <div class="chat-controls">
+        <label class="switch"><input type="checkbox" id="autoPlay" checked><span>Авто</span></label>
+        <button id="btnNext" class="btn btn-primary btn-small">Следующая реплика →</button>
+        <button id="btnRestart" class="btn btn-ghost btn-small">Заново</button>
+      </div>
+    </section>
+  </div>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>🏆 Работы команд</h2>
+      <span class="muted" style="font-size:13px">обновляется каждые 3 секунды</span>
+    </div>
+    <div class="cards-3" id="teamCards"></div>
+  </section>
+</main>
+
+<script src="/vendor/qrcode.min.js"></script>
+<script src="/js/common.js"></script>
+<script src="/teacher.js"></script>
+</body>
+</html>

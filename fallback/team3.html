@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<title>Тап-раннер</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { height: 100%; overflow: hidden; background: #071226; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+  body { touch-action: none; }
+  canvas { display: block; width: 100vw; height: 100vh; }
+  .hud {
+    position: fixed; top: 0; left: 0; right: 0;
+    display: flex; justify-content: space-between;
+    padding: 12px 16px; color: #fff; font-size: 18px; font-weight: 600;
+    text-shadow: 0 0 10px rgba(167, 139, 250, 0.8);
+    pointer-events: none; z-index: 2;
+  }
+  .screen {
+    position: fixed; inset: 0; z-index: 3;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px;
+    background: rgba(4, 10, 24, 0.87); color: #fff; text-align: center; padding: 24px;
+  }
+  .screen h1 { font-size: 34px; }
+  .screen p { color: #9fb0d8; font-size: 16px; line-height: 1.5; }
+  .screen button {
+    font-size: 20px; padding: 14px 34px; border: none; border-radius: 16px;
+    background: linear-gradient(135deg, #a78bfa, #4cc9f0);
+    color: #0a0e1a; font-weight: 700; cursor: pointer;
+  }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div class="hud">
+  <span id="score">Дистанция: 0</span>
+  <span id="best">Рекорд: 0</span>
+</div>
+
+<div class="screen" id="startScreen">
+  <h1>🏃 Тап-раннер</h1>
+  <p>Тапни по экрану — персонаж прыгнет.<br>Не врезайся в кактусы! Скорость только растёт.</p>
+  <button id="btnStart">Побежали!</button>
+</div>
+
+<div class="screen hidden" id="overScreen">
+  <h1>💥 Ой!</h1>
+  <p id="overScore">Дистанция: 0</p>
+  <button id="btnRestart">Попробовать снова</button>
+</div>
+
+<script>
+(function () {
+  var canvas = document.getElementById('game');
+  var ctx = canvas.getContext('2d');
+  var W = 0, H = 0, groundY = 0;
+
+  function resize() {
+    var dpr = window.devicePixelRatio || 1;
+    W = window.innerWidth;
+    H = window.innerHeight;
+    canvas.width = W * dpr;
+    canvas.height = H * dpr;
+    canvas.style.width = W + 'px';
+    canvas.style.height = H + 'px';
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    groundY = H - 84;
+  }
+  window.addEventListener('resize', resize);
+  resize();
+
+  var GRAVITY = 2300, JUMP_V = -830;
+  var runner, obstacles, clouds;
+  var speed, dist, running = false, lastTime = 0, spawnGap, best = 0;
+
+  function reset() {
+    runner = { x: Math.min(100, W * 0.2), y: groundY, vy: 0, onGround: true, run: 0 };
+    obstacles = [];
+    clouds = [];
+    speed = 320;
+    dist = 0;
+    spawnGap = 1.2;
+    updateHud();
+  }
+
+  function updateHud() {
+    document.getElementById('score').textContent = 'Дистанция: ' + Math.floor(dist);
+    document.getElementById('best').textContent = 'Рекорд: ' + Math.floor(best);
+  }
+
+  function jump() {
+    if (!running) return;
+    if (runner.onGround) {
+      runner.vy = JUMP_V;
+      runner.onGround = false;
+    }
+  }
+
+  window.addEventListener('touchstart', function (e) { e.preventDefault(); jump(); }, { passive: false });
+  window.addEventListener('mousedown', jump);
+  window.addEventListener('keydown', function (e) { if (e.code === 'Space') jump(); });
+
+  function spawnObstacle() {
+    var h = 42 + Math.random() * 42;
+    obstacles.push({ x: W + 50, y: groundY - h, w: 30, h: h });
+  }
+
+  function spawnCloud() {
+    clouds.push({
+      x: W + 80,
+      y: 36 + Math.random() * (groundY * 0.55),
+      w: 60 + Math.random() * 70,
+      s: 0.25 + Math.random() * 0.4
+    });
+  }
+
+  function step(dt) {
+    speed += 16 * dt;
+    dist += speed * dt / 10;
+
+    runner.vy += GRAVITY * dt;
+    runner.y += runner.vy * dt;
+    if (runner.y >= groundY) {
+      runner.y = groundY;
+      runner.vy = 0;
+      runner.onGround = true;
+    }
+    runner.run += dt * (speed / 28);
+
+    spawnGap -= dt;
+    if (spawnGap <= 0) {
+      spawnObstacle();
+      spawnGap = Math.max(0.55, 1.5 - speed / 2200) * (0.7 + Math.random() * 0.6);
+    }
+    if (Math.random() < dt * 0.5) spawnCloud();
+
+    var rx = runner.x - 15, rw = 30, rTop = runner.y - 46, rBot = runner.y;
+
+    for (var i = obstacles.length - 1; i >= 0; i--) {
+      var o = obstacles[i];
+      o.x -= speed * dt;
+      if (o.x + o.w < -60) { obstacles.splice(i, 1); continue; }
+      if (rx < o.x + o.w - 4 && rx + rw > o.x + 4 && rBot > o.y + 8 && rTop < o.y + o.h - 2) {
+        endGame();
+      }
+    }
+
+    for (var j = clouds.length - 1; j >= 0; j--) {
+      clouds[j].x -= speed * dt * clouds[j].s;
+      if (clouds[j].x + clouds[j].w < -80) clouds.splice(j, 1);
+    }
+  }
+
+  function draw() {
+    var g = ctx.createLinearGradient(0, 0, 0, H);
+    g.addColorStop(0, '#0d1638');
+    g.addColorStop(1, '#071226');
+    ctx.fillStyle = g;
+    ctx.fillRect(0, 0, W, H);
+
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    for (var c = 0; c < clouds.length; c++) {
+      var cl = clouds[c];
+      ctx.beginPath();
+      ctx.ellipse(cl.x, cl.y, cl.w / 2, 14, 0, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    ctx.strokeStyle = '#3b4f9c';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, groundY + 3);
+    ctx.lineTo(W, groundY + 3);
+    ctx.stroke();
+
+    ctx.fillStyle = 'rgba(76, 201, 240, 0.16)';
+    var dashW = 46, gap = 30, off = (dist * 22) % (dashW + gap);
+    for (var x = -off; x < W; x += dashW + gap) {
+      ctx.fillRect(x, groundY + 12, dashW, 5);
+    }
+
+    for (var i = 0; i < obstacles.length; i++) {
+      var o = obstacles[i];
+      ctx.font = '38px serif';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'alphabetic';
+      ctx.fillText('🌵', o.x + o.w / 2, groundY - 2);
+    }
+
+    var bob = runner.onGround ? Math.sin(runner.run * 2.2) * 2 : 0;
+    ctx.font = '42px serif';
+    ctx.textAlign = 'center';
+    ctx.fillText('🏃', runner.x, runner.y - 4 + bob);
+  }
+
+  function loop(t) {
+    if (!running) return;
+    var dt = Math.min(0.05, (t - lastTime) / 1000 || 0.016);
+    lastTime = t;
+    step(dt);
+    draw();
+    requestAnimationFrame(loop);
+  }
+
+  function start() {
+    reset();
+    running = true;
+    document.getElementById('startScreen').classList.add('hidden');
+    document.getElementById('overScreen').classList.add('hidden');
+    lastTime = performance.now();
+    requestAnimationFrame(loop);
+  }
+
+  function endGame() {
+    running = false;
+    best = Math.max(best, Math.floor(dist));
+    document.getElementById('overScore').textContent = 'Дистанция: ' + Math.floor(dist);
+    document.getElementById('overScreen').classList.remove('hidden');
+  }
+
+  document.getElementById('btnStart').addEventListener('click', function (e) { e.stopPropagation(); start(); });
+  document.getElementById('btnRestart').addEventListener('click', function (e) { e.stopPropagation(); start(); });
+  document.getElementById('startScreen').addEventListener('touchend', function (e) {
+    if (e.target.tagName !== 'BUTTON') { e.preventDefault(); start(); }
+  }, { passive: false });
+})();
+</script>
+</body>
+</html>

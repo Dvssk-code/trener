@@ -1,0 +1,16 @@
+{
+  "name": "vibeclass",
+  "version": "1.0.0",
+  "description": "VibeClass — интерактивный урок вайб-кодинга: учитель демонстрирует, ученики строят мобильную игру, просив об этом ИИ словами",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.5",
+    "express": "^4.21.2"
+  }
+}
